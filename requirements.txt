@@ -9,3 +9,8 @@ openpyxl
 keras
 ipykernel
 notebook
+lightgbm
+catboost
+pylance
+ipywidgets
+optuna
