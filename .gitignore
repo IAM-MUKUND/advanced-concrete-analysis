@@ -1,3 +1,6 @@
 .venv
 *.Identifier
 /catboost_info
+archive.txt
+/saved_models
+/image_outputs

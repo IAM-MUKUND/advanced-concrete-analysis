@@ -1,0 +1,5 @@
+pandoc ./papers/main_paper.md \
+  -o paper.pdf \
+  --pdf-engine=xelatex \
+  -V geometry:margin=1in \
+  -V fontsize=11pt

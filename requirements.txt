@@ -14,3 +14,4 @@ catboost
 pylance
 ipywidgets
 optuna
+shap
