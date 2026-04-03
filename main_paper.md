@@ -15,17 +15,21 @@ header-includes:
   - \usepackage{needspace}
   - \raggedbottom
   - \setlength{\parskip}{0.5\baselineskip}
+  - \usepackage{float}
+  - \let\origfigure\figure
+  - \let\endorigfigure\endfigure
+  - \renewenvironment{figure}[1][H]{\origfigure[H]}{\endorigfigure}
 ---
 
 \newpage
 
 ## Abstract
 
-The accurate prediction of compressive strength is essential for safe and sustainable concrete design. This study introduces a unified machine learning framework that successfully combines two heterogeneous datasets — geopolymer concrete (2,087 original samples) and lightweight/foamed concrete (1,006 original samples) — into a single robust predictive model. After domain-aware preprocessing, including systematic removal of physically unrealistic values (age > 175 days, curing temperature >= 90 degrees C, alkaline solution outside 100-300 kg/m3, etc.) and creation of a categorical concrete_type feature with NaN placeholders for domain-specific variables, the final cleaned and combined dataset contained 2,603 samples.
+The accurate prediction of compressive strength is essential for safe and sustainable concrete design. This study introduces a unified machine learning framework that combines two heterogeneous datasets — geopolymer concrete (2,087 original samples) and lightweight/foamed concrete (1,006 original samples) — into a single robust predictive model. After domain-aware preprocessing, including removal of physically unrealistic values (age > 175 days, curing temperature >= 90 degrees C, alkaline solution outside 100-300 kg/m3, etc.) and creation of a categorical concrete_type feature with NaN placeholders for domain-specific variables, the final cleaned and combined dataset contained 2,603 samples.
 
-Five tree-based ensemble models were evaluated under rigorous hyperparameter tuning using GridSearchCV and Optuna: XGBoost, CatBoost, LightGBM, Random Forest, and Gradient Boosting Regressor. CatBoost achieved the best overall performance with an R2 of 0.8966, RMSE of 7.19 MPa, and MAE of 3.54 MPa on the combined test set. Domain-specific evaluation further confirmed excellent generalisation across concrete families: geopolymer-only R2 approximately 0.80 and lightweight-only R2 approximately 0.98. SHAP (SHapley Additive exPlanations) interpretability analysis revealed physically meaningful feature importance rankings — alkaline solution and molarity of mix dominated geopolymer predictions, while density was the primary driver for lightweight concrete predictions. Bootstrapping with 200 iterations generated 95% prediction intervals, providing essential uncertainty quantification for practical engineering applications.
+Five tree-based ensemble models were evaluated under hyperparameter tuning using GridSearchCV and Optuna: XGBoost, CatBoost, LightGBM, Random Forest, and Gradient Boosting Regressor. CatBoost achieved the best overall performance with an R2 of 0.8966, RMSE of 7.19 MPa, and MAE of 3.54 MPa on the combined test set. Domain-specific evaluation further confirmed excellent generalisation across concrete families: geopolymer-only R2 approximately 0.80 and lightweight-only R2 approximately 0.98. SHAP (SHapley Additive exPlanations) interpretability analysis revealed physically meaningful feature importance rankings — alkaline solution and molarity of mix dominated geopolymer predictions, while density was the primary driver for lightweight concrete predictions. Bootstrapping with 200 iterations generated 95% prediction intervals, providing essential uncertainty quantification for practical engineering applications.
 
-The results demonstrate that a carefully engineered combined-dataset strategy, supported by domain-specific preprocessing, NaN-aware modelling pipelines, and advanced ensemble modelling, can effectively bridge chemically and physically distinct concrete families under one unified framework. This work offers both high predictive accuracy and clear physical interpretability, advancing the state of the art in data-driven concrete mix design.
+The results indicate that a carefully engineered combined-dataset strategy, supported by domain-specific preprocessing, NaN-aware modelling pipelines, and advanced ensemble modelling, can effectively bridge chemically and physically distinct concrete families under one unified framework. This work offers both high predictive accuracy and clear physical interpretability, advancing the state of the art in data-driven concrete mix design.
 
 **Keywords:** Compressive strength prediction, geopolymer concrete, lightweight concrete, combined dataset, CatBoost, SHAP interpretability, uncertainty quantification, bootstrapping, machine learning, ensemble models
 
@@ -33,24 +37,24 @@ The results demonstrate that a carefully engineered combined-dataset strategy, s
 
 ## 1. Introduction
 
-Concrete is the second most consumed material on Earth, exceeded only by water. Global production of cement — the primary binding agent in conventional concrete — exceeds 4 billion tonnes annually, contributing roughly 8% of global CO2 emissions. The escalating urgency of climate change has accelerated the search for alternative binder systems and mix designs that reduce carbon footprint while meeting structural performance demands.
+Concrete is the second most consumed material on Earth, exceeded only by water. Global production of cement — the primary binding agent in conventional concrete — exceeds 4 billion tonnes annually, contributing roughly 8% of global CO2 emissions. The increasing urgency of climate change has accelerated the search for alternative binder systems and mix designs that reduce carbon footprint while meeting structural performance demands.
 
-Among the most promising alternatives are **geopolymer concrete** (also called alkali-activated concrete) and **lightweight/foamed concrete**. Geopolymer concrete replaces Portland cement with industrial by-products such as fly ash and slag, activated by alkaline solutions (typically sodium silicate and sodium hydroxide). This substitution can reduce CO2 emissions by 40-80% compared to ordinary Portland cement. Lightweight and foamed concrete, on the other hand, incorporates pre-formed foam or air-entraining agents to achieve densities significantly below that of normal concrete, resulting in excellent thermal insulation, reduced self-weight in structures, and superior fire resistance.
+Among the widely studied alternatives are **geopolymer concrete** (also called alkali-activated concrete) and **lightweight/foamed concrete**. Geopolymer concrete replaces Portland cement with industrial by-products such as fly ash and slag, activated by alkaline solutions (typically sodium silicate and sodium hydroxide). This substitution can reduce CO2 emissions by 40-80% compared to ordinary Portland cement. Lightweight and foamed concrete, on the other hand, incorporates pre-formed foam or air-entraining agents to achieve densities significantly below that of normal concrete, resulting in excellent thermal insulation, reduced self-weight in structures, and superior fire resistance.
 
 Despite these benefits, predicting the compressive strength of both concrete families remains a significant engineering challenge. **Geopolymer concrete** involves highly complex chemical reactions — the polycondensation of aluminosilicate precursors under alkaline conditions — that are sensitive to binder chemistry, alkaline activator concentration, molarity of the alkaline solution, curing temperature, and age. **Lightweight/foamed concrete**, conversely, is governed largely by its air-void microstructure, whose volume fraction and homogeneity are controlled by the foaming agent dosage, binder content, water-to-binder ratio, and density. The governing physics of the two families are fundamentally distinct, creating a covariate shift problem when data from both are naively merged.
 
-Traditional empirical models (e.g., ACI code relationships, regression-based mix design charts) are calibrated for normal-weight Portland cement concrete and perform poorly on these advanced material systems. Experimental campaigns are time-consuming, resource-intensive, and difficult to generalise across laboratories. Machine learning (ML) has emerged as a powerful complement to experimental work, offering the ability to learn complex, non-linear input-output relationships from existing experimental databases.
+Traditional empirical models (e.g., ACI code relationships, regression-based mix design charts) are calibrated for normal-weight Portland cement concrete and perform poorly on these advanced material systems. Experimental campaigns are time-consuming, resource-intensive, and difficult to generalise across laboratories. Machine learning (ML) has emerged as a useful complement to experimental work, offering the ability to learn complex, non-linear input-output relationships from existing experimental databases.
 
 However, a critical gap exists in the literature: most ML studies focus exclusively on a single concrete family, developing separate models for geopolymer concrete and for lightweight/foamed concrete. This single-family approach has two important drawbacks. First, individual datasets are often modest in size (a few hundred to low thousands of samples), limiting model generalisation. Second, separate models offer no opportunity to leverage shared domain knowledge — for instance, the influence of binder type and water content is physically relevant in both families.
 
-This study addresses this gap by developing a **unified ML model** capable of accurately predicting compressive strength across both geopolymer and lightweight concrete families simultaneously. The key novelty lies in the domain-aware data fusion strategy: rather than naively concatenating the two datasets, a categorical concrete_type feature is introduced to enable explicit domain separation within the model, while NaN placeholders preserve the structural integrity of domain-specific variables that are undefined for the opposite concrete type.
+This study addresses this gap by developing a **unified ML model** capable of accurately predicting compressive strength across both geopolymer and lightweight concrete families simultaneously. The key lies in the domain-aware data fusion strategy: rather than naively concatenating the two datasets, a categorical concrete_type feature is introduced to enable explicit domain separation within the model, while NaN placeholders preserve the structural integrity of domain-specific variables that are undefined for the opposite concrete type.
 
 ### 1.1 Research Objectives
 
 The main objectives of this study are:
 
 1. To combine two heterogeneous concrete datasets while explicitly preserving the domain-specific physics of each concrete family through feature engineering and NaN-aware modelling.
-2. To evaluate five state-of-the-art tree-based ensemble models with rigorous hyperparameter optimisation (GridSearchCV and Optuna) on both individual and combined datasets.
+2. To evaluate five state-of-the-art tree-based ensemble models with hyperparameter optimisation (GridSearchCV and Optuna) on both individual and combined datasets.
 3. To provide physically interpretable insights into model behaviour through SHAP analysis, validating that the model has learned the correct physics of each concrete type.
 4. To quantify prediction uncertainty using non-parametric bootstrapping, generating calibrated 95% prediction intervals suitable for engineering decision-making.
 5. To benchmark the combined-dataset approach against individual-dataset results and against previous studies in the literature.
@@ -61,7 +65,7 @@ The main objectives of this study are:
 
 ### 2.1 Machine Learning for Compressive Strength Prediction
 
-The application of machine learning to concrete compressive strength prediction has grown rapidly over the past decade. Early work focused on artificial neural networks (ANNs), which demonstrated superior performance over traditional regression models due to their ability to capture non-linear relationships between mix design parameters and mechanical properties. More recently, tree-based ensemble methods — particularly gradient boosting variants — have emerged as the dominant paradigm, offering both strong predictive performance and improved interpretability compared to deep neural networks.
+The application of machine learning to concrete compressive strength prediction has grown significantly over the past decade. Early work focused on artificial neural networks (ANNs), which demonstrated superior performance over traditional regression models due to their ability to capture non-linear relationships between mix design parameters and mechanical properties. More recently, tree-based ensemble methods — particularly gradient boosting variants — have emerged as the dominant paradigm, offering both strong predictive performance and improved interpretability compared to deep neural networks.
 
 Mandal (2024) combined two distinct normal concrete datasets and achieved an R2 of 0.93 using Gradient Boosting, with the study highlighting the significant benefit of dataset diversity for reducing overfitting and improving generalisation. The work explicitly noted that a more diverse training set — even if it introduces some between-dataset heterogeneity — tends to produce more robust models than training on a single, homogeneous source.
 
@@ -77,7 +81,7 @@ The feature importance patterns identified in the present study's individual geo
 
 ### 2.3 Machine Learning for Lightweight and Foamed Concrete
 
-In lightweight and foamed concrete, the literature consistently demonstrates that density is a near-universal dominant predictor. This is physically intuitive: foamed concrete's compressive strength is primarily governed by its air-void fraction, which is directly reflected in the measured dry density. Salami et al. (2022) demonstrated that ML models achieve R2 > 0.95 on foamed concrete datasets when density is included as a feature, but performance degrades substantially (R2 dropping to 0.70-0.75) when density is excluded and only mix-design inputs are used.
+In lightweight and foamed concrete, the literature consistently demonstrates that density is a near-universal dominant predictor. This is physically logical: foamed concrete's compressive strength is primarily governed by its air-void fraction, which is directly reflected in the measured dry density. Salami et al. (2022) demonstrated that ML models achieve R2 > 0.95 on foamed concrete datasets when density is included as a feature, but performance degrades substantially (R2 dropping to 0.70-0.75) when density is excluded and only mix-design inputs are used.
 
 Onyelowe et al. (2024) applied symbolic regression to a lightweight foamed concrete dataset of 312 samples, achieving R2 = 0.97. Their work confirmed the dominant role of density (importance weight approximately 38%) and binder content (approximately 30%), with water, fine aggregate, and age playing supporting roles. These findings are consistent with the individual lightweight dataset results in the present study, where both Random Forest (R2 = 0.9769) and XGBoost (R2 = 0.9757) confirmed binder (importance approximately 48% for RF, approximately 45% for XGBoost) and density (approximately 32% for RF, approximately 27% for XGBoost) as the two most important features.
 
@@ -87,7 +91,7 @@ A systematic review of the recent literature reveals a striking gap: no publishe
 
 The present study fills this gap through three key contributions:
 
-1. A novel domain-aware data fusion strategy using NaN-aware modelling and explicit concrete-type encoding.
+1. A domain-aware data fusion strategy using NaN-aware modelling and explicit concrete-type encoding.
 2. A comprehensive evaluation of five state-of-the-art ensemble models with industrial-grade hyperparameter optimisation.
 3. A complete uncertainty quantification framework via non-parametric bootstrapping that provides confidence intervals suitable for structural engineering applications.
 
@@ -132,21 +136,33 @@ This dataset was provided in a 3-level header Excel format. After parsing and re
 
 Prior to combination, each dataset was subjected to thorough exploratory data analysis (EDA) to understand its distribution characteristics, identify outliers, and assess inter-feature correlations. The EDA comprised four complementary analyses:
 
+\FloatBarrier
+
 ![Geopolymer Histograms](image_outputs/geopolymer_histograms.png){width=48%} ![Lightweight Histograms](image_outputs/lightweight_histograms.png){width=48%}
 
 **Figure 1**: Histograms of key features in the geopolymer and lightweight datasets, showing distributional characteristics and potential outliers.
 
+\FloatBarrier
+
 **Histograms** (Figure 1) revealed important distributional characteristics. The compressive strength distribution in the geopolymer dataset is approximately log-normal with a mean of approximately 38.7 MPa (post-cleaning), while the lightweight dataset compressive strength distribution is heavily right-skewed with a mean of approximately 11.5 MPa — reflecting the fundamentally different strength ranges of the two concrete families.
+
+\FloatBarrier
 
 ![geopolymer correlation](image_outputs/geopolymer_correlation.png){width=48%} ![lightweight correlation](image_outputs/lightweight_correlation.png){width=48%}
 
 **Figure 2**: Correlation matrices for the geopolymer and lightweight datasets, showing inter-feature correlations.
 
+\FloatBarrier
+
 **Correlation matrices** (Figure 2) provided insights into feature inter-dependencies. In the geopolymer dataset, notable correlations were observed between binder and alkaline solution (r approximately 0.48), reflecting common mix design proportioning rules. In the lightweight dataset, the strongest correlation was between density and compressive strength (r approximately 0.87), confirming density as the dominant predictor.
+
+\FloatBarrier
 
 ![Geopolymer Scatter Plot](image_outputs/geopolymer_scatter.png){width=48%} ![Lightweight Scatter Plot](image_outputs/lightweight_scatter.png){width=48%}
 
 **Figure 3**: Scatter plots of key features against compressive strength for the geopolymer and lightweight datasets, used to identify non-linear relationships and potential outliers.
+
+\FloatBarrier
 
 **Scatter plots against compressive strength** (Figure 3) were used to identify non-linear relationships and visually flag potential outliers. For the geopolymer dataset, scatter plots revealed that alkaline solution concentrations above 300 kg/m3 corresponded to an extremely sparse cluster of samples with unusually low compressive strengths, suggesting experimental errors or extreme mix designs outside the target application domain. Similarly, samples with curing temperatures above 90 degrees C formed an isolated cluster inconsistent with practical geopolymer processing conditions.
 
@@ -154,9 +170,9 @@ Prior to combination, each dataset was subjected to thorough exploratory data an
 
 #### 3.3.1 Outlier Removal Strategy
 
-A deliberate decision was made to **avoid the standard IQR (Interquartile Range) method** for outlier removal. The rationale is that the two datasets have fundamentally different distributions — the strength range of lightweight concrete (0-80 MPa) is far narrower than that of geopolymer concrete (0-120+ MPa), and applying a single IQR threshold across the combined dataset would either over-remove legitimate geopolymer samples or under-remove extreme lightweight samples. Instead, **domain-specific physical bounds** were applied to each dataset separately, based on knowledge of physically plausible mix design ranges for each concrete family.
+The **standard IQR (Interquartile Range)** method was not used for outlier removal. This is because the two datasets have fundamentally different distributions — the strength range of lightweight concrete (0-80 MPa) is far narrower than that of geopolymer concrete (0-120+ MPa), and applying a single IQR threshold across the combined dataset would either over-remove legitimate geopolymer samples or under-remove extreme lightweight samples. Instead, **domain-specific physical bounds** were applied to each dataset separately, based on knowledge of physically plausible mix design ranges for each concrete family. The applied bounds were as follows.
 
-The applied bounds were as follows.
+\newpage
 
 For the geopolymer dataset:
 
@@ -184,11 +200,13 @@ After these cleaning operations, the geopolymer dataset retained **1,691 samples
 
 ### 3.4 Dataset Combination Strategy
 
-The combination of two heterogeneous datasets requires careful engineering to avoid naive data fusion errors. The strategy adopted in this study comprised three steps.
+The combination of two heterogeneous datasets requires careful engineering to avoid naive data fusion errors. The dataset combination strategy consists of three steps.
 
 **Step 1 — Unified Column Schema.** A unified feature schema was defined containing all 13 possible input features from both datasets: binder, extra water, water, alkaline solution, molarity of mix, fine aggregate, coarse aggregate, pozzolan, foaming agent, density, age, curing temperature, and compressive strength. Features not applicable to a given concrete family were populated with NaN placeholders. Geopolymer samples have NaN for water, pozzolan, foaming agent, and density; lightweight samples have NaN for extra water, alkaline solution, molarity of mix, coarse aggregate, and curing temperature. The structured missingness pattern is deliberately informative — the pattern itself encodes domain membership and allows NaN-aware models to infer concrete type from the data alone, even without the explicit concrete_type feature.
 
-**Step 2 — Concrete Type Encoding.** A categorical feature concrete_type was created: 0 = geopolymer, 1 = lightweight. This feature serves as an explicit domain indicator that allows tree-based models to perform conditional splits based on concrete type. 
+\newpage
+
+**Step 2 — Concrete Type Encoding.** A categorical feature concrete_type was created: 0 = geopolymer, 1 = lightweight. This feature serves as an explicit domain indicator that allows tree-based models to perform conditional splits based on concrete type.
 
 **Step 3 — Water-Binder Ratio Feature Engineering.** An engineered feature water_binder_ratio was computed as:
 
@@ -209,6 +227,8 @@ Five tree-based ensemble regressors were selected for evaluation:
 **Random Forest** is a bagging ensemble of decision trees, trained on bootstrapped subsets of the training data with feature subsampling at each split. It was trained on a version of the data where NaN values were imputed with zero (using SimpleImputer with constant strategy) followed by StandardScaler normalisation.
 
 **Gradient Boosting Regressor** (scikit-learn implementation) is a traditional gradient boosting method. Like Random Forest, it does not natively handle NaN values and was trained on the zero-imputed, scaled dataset.
+
+\newpage
 
 ### 3.6 Hyperparameter Optimisation
 
@@ -233,6 +253,8 @@ Performance was quantified using four metrics:
 
 Domain-specific evaluation was conducted post-hoc by filtering the test set into geopolymer-only and lightweight-only subsets and computing metrics separately.
 
+\newpage
+
 ### 3.8 SHAP Interpretability Analysis
 
 SHAP (SHapley Additive exPlanations) values were computed to provide model-agnostic feature importance rankings and directional contribution plots. For CatBoost and LightGBM, the fast TreeExplainer was used. For XGBoost, a PermutationExplainer was employed due to compatibility issues between the SHAP TreeExplainer and certain XGBoost model configurations. SHAP summary plots (beeswarm plots) were generated for each model, showing both the magnitude and direction of each feature's contribution to individual predictions.
@@ -256,7 +278,7 @@ This bootstrap approach is non-parametric and makes no assumptions about the dis
 
 Table 1 presents the performance of seven ML models on the geopolymer dataset alone. This individual analysis served as a baseline and as motivation for the choice of tree-based ensemble models for the combined analysis.
 
-\needspace{5cm}
+\needspace{6cm}
 
 **Table 1: Performance metrics on geopolymer dataset (individual analysis, 80/20 split)**
 
@@ -270,32 +292,41 @@ Table 1 presents the performance of seven ML models on the geopolymer dataset al
 | **XGBoost**               | **0.8297** | **4.9555** | **58.2221** | **7.6303** |
 | ANN                       | 0.7558   | 6.5516    | 83.4474    | 9.1349     |
 
+\FloatBarrier
+
 ![](image_outputs/bargraph_eval_comparison_geopolymer.png){width=70%}
 
-**Figure 4**: Bar graph comparing R2 scores of different ML models on the geopolymer dataset (individual analysis).
+**Figure 4**: Bar graph comparing performance metrics of different ML models on the geopolymer dataset (individual analysis).
 
-Linear Regression and Support Vector Regression perform poorly (R2 = 0.27 and 0.46 respectively), confirming that the relationship between geopolymer mix parameters and compressive strength is highly non-linear. This aligns with the known complexity of geopolymerisation kinetics, which involves multiple simultaneous chemical reactions whose interactions cannot be captured by linear mappings.
+\FloatBarrier
+
+Linear Regression and Support Vector Regression perform poorly (R2 = 0.27 and 0.46 respectively), confirming that the relationship between geopolymer mix parameters and compressive strength is highly non-linear. This is consistent with the known complexity of geopolymerisation kinetics, which involves multiple simultaneous chemical reactions whose interactions cannot be captured by linear mappings.
 
 XGBoost achieves the best performance at R2 = 0.8297 and RMSE = 7.63 MPa. After Optuna-based hyperparameter optimisation (best parameters: n_estimators = 628, learning_rate = 0.013, max_depth = 9, subsample = 0.54, colsample_bytree = 0.52), the tuned XGBoost achieved R2 = 0.8236. GridSearchCV on XGBoost yielded R2 = 0.8268 with best parameters: colsample_bytree = 0.5, learning_rate = 0.05, max_depth = 5, n_estimators = 400.
 
 **Feature importance analysis** from the geopolymer individual models revealed contrasting but physically meaningful rankings.
 
+\FloatBarrier
+
 ![feature importance](image_outputs/feature_imp_geo_randomfor.png){width=50%} ![feature importance](image_outputs/feature_imp_geo_xgb.png){width=50%}
 
-**Figure 5**: SHAP feature importance summary plots for Random Forest and XGBoost on the geopolymer dataset (individual analysis).
+**Figure 5**: Feature importance plots for Random Forest and XGBoost on the geopolymer dataset (individual analysis).
+
+\FloatBarrier
 
 Random Forest feature ranking: fine aggregate (17.7%), binder (17.4%), age (17.3%), coarse aggregate (14.9%), curing temperature (13.8%), alkaline solution (11.9%), molarity of mix (3.8%), extra water (3.1%).
 
 XGBoost feature ranking: coarse aggregate (18.5%), alkaline solution (16.7%), curing temperature (13.8%), age (13.0%), fine aggregate (12.1%), binder (11.9%), extra water (8.6%), molarity of mix (5.4%).
 
-The discrepancy between models reflects their different split-finding algorithms. XGBoost assigns higher importance to alkaline solution and curing temperature — both directly relevant to polycondensation reaction kinetics — while Random Forest weights fine aggregate and binder more heavily. Both rankings are physically defensible.
+The differences between models reflects their different split-finding algorithms. XGBoost assigns higher importance to alkaline solution and curing temperature — both directly relevant to polycondensation reaction kinetics — while Random Forest weights fine aggregate and binder more heavily. Both rankings are physically defensible.
 
+\newpage
 
 ### 4.2 Individual Dataset Performance — Lightweight Concrete
 
 Table 2 presents the performance of the same seven ML models on the lightweight dataset alone. All models achieve substantially higher R2 values compared to the geopolymer dataset, with the best models exceeding R2 = 0.97.
 
-\needspace{5cm}
+\needspace{6cm}
 
 **Table 2: Performance metrics on lightweight dataset (individual analysis, 80/20 split)**
 
@@ -309,9 +340,13 @@ Table 2 presents the performance of the same seven ML models on the lightweight 
 | XGBoost                   | 0.9757   | **1.0294** | **3.4089** | 1.8463     |
 | ANN                       | 0.9382   | 1.7702    | 8.6828     | 2.9467     |
 
+\FloatBarrier
+
 ![lightweight bar graph comparison](image_outputs/bargraph_eval_comparison_lightweight.png){width=70%}
 
-**Figure 6**: Bar graph comparing R2 scores of different ML models on the lightweight dataset (individual analysis).
+**Figure 6**: Bar graph comparing performance metrics of different ML models on the lightweight dataset (individual analysis).
+
+\FloatBarrier
 
 The substantially higher R2 values for the lightweight dataset reflect the dominant role of density as a predictor. Density is a macro-scale measurement that integrates information about the entire air-void system, effectively acting as a summary statistic that encodes the strength-controlling microstructure.
 
@@ -319,21 +354,27 @@ After hyperparameter optimisation, the best XGBoost model (GridSearchCV: colsamp
 
 **Feature importance analysis** from the lightweight individual models:
 
+\FloatBarrier
+
 ![feature importance](image_outputs/feature_imp_light_randomfor.png){width=50%} ![feature importance](image_outputs/feature_imp_light_xgb.png){width=50%}
 
-**Figure 7**: SHAP feature importance summary plots for Random Forest and XGBoost on the lightweight dataset (individual analysis).
+**Figure 7**: Feature importance plots for Random Forest and XGBoost on the lightweight dataset (individual analysis).
+
+\FloatBarrier
 
 Random Forest feature ranking: binder (48.9%), density (31.5%), fine aggregate (9.9%), age (3.0%), water (2.9%), foaming agent (2.7%), pozzolan (1.1%).
 
 XGBoost feature ranking: binder (45.4%), density (26.9%), fine aggregate (17.7%), water (3.1%), foaming agent (2.6%), pozzolan (2.3%), age (2.0%).
 
-The consistent ranking of binder and density as the top two features across both models provides strong physical validation. Binder controls the paste quality and hydration degree, while density directly reflects the air-void content. The agreement between two independent model families (bagging vs. boosting) on the same feature importance ranking increases confidence that these findings reflect real physical relationships.
+The consistent ranking of binder and density as the top two features across both models supports strong physical validation. Binder controls the paste quality and hydration degree, while density directly reflects the air-void content. The agreement between two independent model families (bagging vs. boosting) on the same feature importance ranking increases confidence that these findings reflect real physical relationships.
+
+\newpage
 
 ### 4.3 Performance on the Combined Dataset
 
-Table 3 presents the performance of all five tree-based models on the combined dataset (2,600 samples, 80/20 stratified split). All five models demonstrate robust performance, validating the domain-aware combination strategy.
+Table 3 presents the performance of all five tree-based models on the combined dataset (2,600 samples, 80/20 stratified split). All five models demonstrate consistent performance, validating the domain-aware combination strategy.
 
-\needspace{5cm}
+\needspace{6cm}
 
 **Table 3: Performance metrics for all models on the combined dataset**
 
@@ -345,14 +386,17 @@ Table 3 presents the performance of all five tree-based models on the combined d
 | Gradient Boosting   | 7.4874     | 0.8878   | 3.7805    | 56.0616    |
 | Random Forest       | 8.1059     | 0.8685   | 4.0876    | 65.7060    |
 
+\FloatBarrier
+
 ![combined dataset bargraph](image_outputs/bargraph_eval_comparison_combined.png){width=70%}
 
-**Figure 8**: bar graph comparison of all models on R2, RMSE, MAE, MSE visually confirms CatBoost's consistent top performance across all four metrics.
+**Figure 8**: Bar graph comparison of all models on R2, RMSE, MAE, MSE on the combined dataset, confirming CatBoost's consistent top performance across all four metrics.
 
-CatBoost achieves the best overall performance with R2 = 0.8966, RMSE = 7.19 MPa, and MAE = 3.54 MPa. The performance margin over XGBoost (R2 = 0.8913, RMSE = 7.37 MPa) is modest but consistent, likely attributable to CatBoost's symmetric tree structure and ordered boosting algorithm, which reduce overfitting on the structured-missingness combined dataset.
+\FloatBarrier
+
+CatBoost achieves the highest performance with R2 = 0.8966, RMSE = 7.19 MPa, and MAE = 3.54 MPa. The performance margin over XGBoost (R2 = 0.8913, RMSE = 7.37 MPa) is relatively small but consistent, likely attributable to CatBoost's symmetric tree structure and ordered boosting algorithm, which reduce overfitting on the structured-missingness combined dataset.
 
 Random Forest shows the lowest performance (R2 = 0.8685) among the five models, which is expected given that it was trained on zero-imputed data rather than native NaN-aware data. The zero imputation creates artificial signal: for geopolymer samples, density = 0 (the imputed value) will be interpreted as an extremely low density, whereas the true meaning is "density is undefined for this sample type."
-
 
 #### 4.3.1 Domain-Specific Evaluation
 
@@ -372,55 +416,81 @@ The domain-specific results reveal an asymmetry: the model performs substantiall
 
 Critically, the geopolymer-only R2 of 0.796 on the combined model is comparable to the geopolymer-only R2 of 0.795 achieved by the best individual Random Forest model (Table 1), demonstrating that **the combined model does not sacrifice geopolymer prediction quality** while simultaneously achieving excellent lightweight concrete predictions.
 
+\newpage
+
 ### 4.4 Interpretability Analysis via SHAP
 
-![catboost](image_outputs/shap_catboost.png){width=50%} 
+SHAP summary plots (Figure 9, Figure 10) were generated for CatBoost and the other 4 models. The CatBoost SHAP results are discussed in detail, because CatBoost is the best-performing model and its native handling of the concrete_type categorical feature provides clear interpretability insights. It also captures the domain-conditional feature importance patterns most effectively.
+
+\FloatBarrier
+
+![catboost](image_outputs/shap_catboost.png){width=55%}
 
 **Figure 9**: SHAP summary plot for the CatBoost model on the combined dataset, showing global feature importance and directional contributions.
+
+\FloatBarrier
+
+**Global feature importance (CatBoost SHAP beeswarm plot):**
+
+The most important features globally were, in order of mean absolute SHAP value: alkaline solution, age, binder, molarity of mix, coarse aggregate, fine aggregate, water binder ratio, curing temperature, extra water, density. The top ranking of alkaline solution reflects the geopolymer concrete samples, where alkaline solution has extremely high SHAP magnitude.
+
+\FloatBarrier
 
 ![xgboost](image_outputs/shap_xgb.png){width=25%} ![lightgbm](image_outputs/shap_lgbm.png){width=25%} ![randomforest](image_outputs/shap_rf.png){width=25%} ![gradientboosting](image_outputs/shap_gb.png){width=25%}
 
 **Figure 10**: SHAP summary plots for XGBoost, LightGBM, Random Forest, and Gradient Boosting on the combined dataset, showing consistent feature importance patterns across models.
 
-SHAP summary plots (Figure 9, Figure 10) were generated for Catboost and the other 4 models. The CatBoost SHAP results are discussed in detail, because CatBoost is the best-performing model and its native handling of the concrete_type categorical feature provides the most reliable interpretability insights. It also captures the domain-conditional feature importance patterns most effectively.
-
-**Global feature importance (CatBoost SHAP beeswarm plot):**
-
-The most important features globally were, in order of mean absolute SHAP value: alkaline solution, age, binder, molarity of mix, coarse aggregate, fine aggregate, water binder ratio, curing temperature, extra water, density.The top ranking of alkaline solution reflects the geopolymer concrete samples, where alkaline solution has extremely high SHAP magnitude.
-
+\FloatBarrier
+\newpage
 **Domain-conditional SHAP interpretation for geopolymer samples:**
+
+\FloatBarrier
 
 ![catboost curing temperature](image_outputs/catboost_shap_curing_temperature.png){width=50%} ![catboost alkaline solution](image_outputs/catboost_shap_alkaline_sol.png){width=50%}
 
 **Figure 11**: SHAP dependence plots for curing temperature and alkaline solution in the CatBoost model, showing non-linear relationships consistent with known physical phenomena in geopolymer concrete.
 
+\FloatBarrier
+
 Alkaline solution showed a strong positive SHAP contribution at intermediate values (160-220 kg/m3) and declining contribution at extreme values, consistent with the known optimum alkaline-to-binder ratio in geopolymer mix design. Curing temperature showed a positive SHAP contribution up to approximately 60 degrees C, with diminishing contributions above 80 degrees C, reflecting the known phenomenon of over-curing causing microcracking. Molarity of mix showed a positive trend that plateaued above approximately 14 mol/L, consistent with literature showing NaOH concentrations above 14-16 mol/L provide diminishing returns.
 
 **Domain-conditional SHAP interpretation for lightweight concrete samples:**
 
+\FloatBarrier
+
 ![catboost density](image_outputs/catboost_shap_density.png){width=50%} ![catboost binder](image_outputs/catboost_shap_binder.png){width=50%}
 
-Density showed a near-monotonic positive SHAP contribution — higher density corresponds to lower porosity and higher strength, consistent with established strength-porosity relationships for foam concrete. 
+\FloatBarrier
 
-Binder content also showed a positive SHAP contribution, reflecting the role of cementitious material in controlling paste quality and hydration degree. The SHAP analysis thus provides a physically meaningful explanation for the model's predictions, increasing confidence in its generalisation capability.
+Density showed a near-monotonic positive SHAP contribution — higher density corresponds to lower porosity and higher strength, consistent with established strength-porosity relationships for foam concrete.
+
+\newpage
+
+Binder content also showed a positive SHAP contribution, reflecting the role of cementitious material in controlling paste quality and hydration degree. The SHAP analysis thus provides a physically meaningful explanation for the model's predictions, supporting its generalisation capability.
 
 ### 4.5 Uncertainty Quantification via Bootstrapping
 
-![parity plot with intervals](image_outputs/catboost_parity_plot.png){width=70%}
+\FloatBarrier
 
-The bootstrap procedure (200 iterations) produced 95% prediction intervals for each of the 520 test samples. The parity plot with prediction intervals (Figure 12) demonstrates the following properties:
+![parity plot with intervals](image_outputs/catboost_parity_plot.png){width=65%}
 
 **Figure 12**: Parity plot of CatBoost predictions on the combined test set, with 95% bootstrap prediction intervals shown as vertical error bars.
+
+\FloatBarrier
+
+The bootstrap procedure (200 iterations) produced 95% prediction intervals for each of the 520 test samples. The parity plot with prediction intervals (Figure 12) shows the following properties:
 
 **Coverage:** The achieved coverage probability was close to the nominal 95%, confirming that the bootstrap intervals are well-calibrated.
 
 **Interval width:** Prediction intervals are narrowest in the 10-40 MPa range (where training data is densest) and widest at the extremes. The mean interval half-width was approximately plus or minus 9-12 MPa for geopolymer samples and plus or minus 3-5 MPa for lightweight samples, consistent with the model's domain-specific RMSE values.
 
-**Practical engineering utility:** The provision of uncertainty intervals transforms the model output from a point prediction to a probabilistic statement. For structural design applications, engineers can use the lower bound of the prediction interval as a conservative design strength, providing a safety margin aligned with limit-state design principles.
+**Practical engineering utility:** The provision of uncertainty intervals allows the model output from a point prediction to a probabilistic statement. For structural design applications, engineers can use the lower bound of the prediction interval as a conservative design strength, providing a safety margin aligned with limit-state design principles.
 
 ### 4.6 Comparison with Previous Studies
 
 Table 5 contextualises the present results against comparable published studies.
+
+\needspace{6cm}
 
 **Table 5: Comparison with recent published studies**
 
@@ -444,17 +514,17 @@ The combined-dataset CatBoost model achieves R2 = 0.8966, competitive with geopo
 
 ### 5.1 Conclusions
 
-This study successfully developed a unified CatBoost-based machine learning framework for compressive strength prediction across geopolymer and lightweight/foamed concrete, trained on a carefully engineered combined dataset of 2,600 samples. The principal conclusions are as follows.
+This study developed a unified CatBoost-based machine learning framework for compressive strength prediction across geopolymer and lightweight/foamed concrete, trained on a carefully engineered combined dataset of 2,600 samples. The principal conclusions are as follows.
 
-**Regarding data preprocessing and combination:** Domain-specific outlier removal based on physical bounds proved superior to generic IQR-based methods for heterogeneous datasets. The NaN-placeholder strategy, combined with explicit concrete_type encoding, enabled tree-based models to perform conditional inference across the two domains without requiring separate model pipelines.
+**Regarding data preprocessing and combination:** Domain-specific outlier removal based on physical bounds was found to be more suitable than generic IQR-based methods for heterogeneous datasets. The NaN-placeholder strategy, combined with explicit concrete_type encoding, enabled tree-based models to perform conditional inference across the two domains without requiring separate model pipelines.
 
-**Regarding model performance:** CatBoost achieved the best overall performance (R2 = 0.8966, RMSE = 7.19 MPa, MAE = 3.54 MPa) on the combined test set, benefiting from its native categorical feature handling and ordered boosting regularisation. All five tree-based models delivered robust combined-dataset performance, demonstrating the data-diversity benefits of the combined approach.
+**Regarding model performance:** CatBoost achieved the best overall performance (R2 = 0.8966, RMSE = 7.19 MPa, MAE = 3.54 MPa) on the combined test set, benefiting from its native categorical feature handling and ordered boosting regularisation. All five tree-based models delivered robust combined-dataset performance, highlighting the data-diversity benefits of the combined approach.
 
 **Regarding domain-specific validation:** Post-hoc evaluation confirmed that the combined model successfully learns distinct physical representations for each concrete type — achieving R2 approximately 0.80 on geopolymer and R2 approximately 0.98 on lightweight subsets — without compromising either domain.
 
 **Regarding SHAP interpretability:** SHAP analysis revealed physically meaningful feature importance rankings consistent with domain knowledge: alkaline solution, molarity of mix, and curing temperature dominate geopolymer predictions, while density and binder content dominate lightweight concrete predictions. These findings align with the fundamental chemistry and physics of each material system.
 
-**Regarding uncertainty quantification:** Bootstrap-derived 95% prediction intervals were well-calibrated and practically useful, with interval widths proportional to local data density. This provides a rigorous probabilistic framework for engineering design applications.
+**Regarding uncertainty quantification:** Bootstrap-derived 95% prediction intervals were well-calibrated and practically useful, with interval widths proportional to local data density. This provides a probabilistic framework for engineering design applications.
 
 ### 5.2 Future Work
 
@@ -497,13 +567,15 @@ Zhang, X., Dai, J., & Liu, Q. (2024). DR-CatBoost: A dynamic regularisation CatB
 **Table A1: Best hyperparameters — XGBoost (combined dataset, GridSearchCV)**
 
 | Parameter        | Searched Values          | Best Value   |
-|------------------|--------------------------|--------------|
+|------------------|--------------------------|--------------| 
 | n_estimators     | 300, 500                 | 500          |
 | max_depth        | 5, 7, 9                  | 7            |
 | learning_rate    | 0.05, 0.1                | 0.1          |
 | subsample        | 0.8, 1.0                 | 0.8          |
 | missing handling | Native NaN               | —            |
+
 \needspace{5cm}
+
 **Table A2: Best hyperparameters — CatBoost (combined dataset, Optuna, 50 trials)**
 
 | Parameter     | Searched Range       | Best Value (approx.) |
@@ -524,6 +596,8 @@ Zhang, X., Dai, J., & Liu, Q. (2024). DR-CatBoost: A dynamic regularisation CatB
 | num_leaves     | 20–100               | ~60                   |
 | boosting_type  | gbdt (fixed)         | gbdt                  |
 
+\needspace{5cm}
+
 **Table A4: Best hyperparameters — Random Forest (combined dataset, GridSearchCV)**
 
 | Parameter          | Searched Values          | Best Value |
@@ -532,6 +606,8 @@ Zhang, X., Dai, J., & Liu, Q. (2024). DR-CatBoost: A dynamic regularisation CatB
 | max_depth          | 10, 15, 20               | 15         |
 | min_samples_split  | 2, 5, 7, 9               | 2          |
 | min_samples_leaf   | 1, 2, 4, 6               | 1          |
+
+\needspace{5cm}
 
 **Table A5: Best hyperparameters — Gradient Boosting Regressor (combined dataset, GridSearchCV)**
 
@@ -573,19 +649,19 @@ Zhang, X., Dai, J., & Liu, Q. (2024). DR-CatBoost: A dynamic regularisation CatB
 **Table B3: Combined dataset missingness structure (2,600 samples)**
 
 | Feature              | Non-null Count | Null Count | Domain        |
-|----------------------|---------------|------------|---------------|
-| binder               | 2,600         | 0          | Both          |
-| extra water          | 1,691         | 909        | Geo only      |
-| water                | 909           | 1,691      | Light only    |
-| alkaline solution    | 1,691         | 909        | Geo only      |
-| molarity of mix      | 1,691         | 909        | Geo only      |
-| fine aggregate       | 2,600         | 0          | Both          |
-| coarse aggregate     | 1,691         | 909        | Geo only      |
-| pozzolan             | 909           | 1,691      | Light only    |
-| foaming agent        | 909           | 1,691      | Light only    |
-| density              | 909           | 1,691      | Light only    |
-| age                  | 2,600         | 0          | Both          |
-| curing temperature   | 1,691         | 909        | Geo only      |
-| concrete_type        | 2,600         | 0          | Both          |
-| water_binder_ratio   | 2,600         | 0          | Both          |
-| compressive strength | 2,600         | 0          | Both (target) |
+|----------------------|----------------|------------|---------------|
+| binder               | 2,600          | 0          | Both          |
+| extra water          | 1,691          | 909        | Geo only      |
+| water                | 909            | 1,691      | Light only    |
+| alkaline solution    | 1,691          | 909        | Geo only      |
+| molarity of mix      | 1,691          | 909        | Geo only      |
+| fine aggregate       | 2,600          | 0          | Both          |
+| coarse aggregate     | 1,691          | 909        | Geo only      |
+| pozzolan             | 909            | 1,691      | Light only    |
+| foaming agent        | 909            | 1,691      | Light only    |
+| density              | 909            | 1,691      | Light only    |
+| age                  | 2,600          | 0          | Both          |
+| curing temperature   | 1,691          | 909        | Geo only      |
+| concrete_type        | 2,600          | 0          | Both          |
+| water_binder_ratio   | 2,600          | 0          | Both          |
+| compressive strength | 2,600          | 0          | Both (target) |
