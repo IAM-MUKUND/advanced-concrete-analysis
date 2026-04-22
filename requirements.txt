@@ -6,6 +6,7 @@ scikit-learn
 xgboost
 optuna
 openpyxl
+torch
 keras
 ipykernel
 notebook
@@ -15,3 +16,4 @@ pylance
 ipywidgets
 optuna
 shap
+keras-tuner
